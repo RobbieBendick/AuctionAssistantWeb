@@ -138,26 +138,37 @@
 (function () {
   let x = 0;
   let y = 0;
+  function tips() {
+    return [...document.querySelectorAll(".wowhead-tooltip")].filter((tip) => {
+      if (tip.closest("a, td")) return false;
+      const style = getComputedStyle(tip);
+      return style.display !== "none" && tip.offsetWidth > 0;
+    });
+  }
   function place() {
-    const tip = document.getElementById("wowhead-tooltip");
-    if (!tip || tip.offsetWidth === 0) return;
-    const gap = 16;
-    const width = tip.offsetWidth;
-    const height = tip.offsetHeight;
-    let left = x + gap;
-    let top = y + gap;
-    if (left + width > window.innerWidth - 8) left = Math.max(8, x - width - gap);
-    if (top + height > window.innerHeight - 8) top = Math.max(8, y - height - gap);
-    const fixed = getComputedStyle(tip).position === "fixed";
-    if (!fixed) {
-      left += window.scrollX;
-      top += window.scrollY;
+    const shown = tips();
+    let nextTop = y + 16;
+    for (const tip of shown) {
+      const gap = 16;
+      const width = tip.offsetWidth;
+      const height = tip.offsetHeight;
+      let left = x + gap;
+      let top = nextTop;
+      if (left + width > window.innerWidth - 8) left = Math.max(8, x - width - gap);
+      if (top + height > window.innerHeight - 8) top = Math.max(8, y - height - gap);
+      const fixed = getComputedStyle(tip).position === "fixed";
+      if (!fixed) {
+        left += window.scrollX;
+        top += window.scrollY;
+      }
+      const mark = left + "," + top;
+      if (tip.dataset.cursor !== mark) {
+        tip.dataset.cursor = mark;
+        tip.style.left = left + "px";
+        tip.style.top = top + "px";
+      }
+      nextTop += height + 8;
     }
-    const mark = left + "," + top;
-    if (tip.dataset.cursor === mark) return;
-    tip.dataset.cursor = mark;
-    tip.style.left = left + "px";
-    tip.style.top = top + "px";
   }
   document.addEventListener("mousemove", (event) => {
     x = event.clientX;
