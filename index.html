@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AuctionAssistant</title>
+<script>const whTooltips = {colorLinks: false, iconizeLinks: false, renameLinks: false};</script>
+<script src="https://wow.zamimg.com/widgets/power.js"></script>
+<script>
+(function () {
+  let x = 0;
+  let y = 0;
+  function tips() {
+    return [...document.querySelectorAll(".wowhead-tooltip")].filter((tip) => {
+      if (tip.closest(".hits")) return true;
+      if (tip.closest("a, td")) return false;
+      const style = getComputedStyle(tip);
+      return style.display !== "none" && tip.offsetWidth > 0;
+    });
+  }
+  let tries = 0;
+  function place() {
+    const shown = tips();
+    const pending = [...document.querySelectorAll(".wowhead-tooltip")].some((tip) => {
+      if (tip.closest(".hits")) return tip.offsetWidth === 0;
+      if (tip.closest("a, td")) return false;
+      return getComputedStyle(tip).display !== "none" && tip.offsetWidth === 0 && tip.textContent.trim();
+    });
+    if (pending && tries < 8) {
+      tries += 1;
+      requestAnimationFrame(place);
+    } else if (!pending) {
+      tries = 0;
+    }
+    const menu = document.querySelector(".hits");
+    const menuBox = menu ? menu.getBoundingClientRect() : null;
+    const overMenu = menuBox && x >= menuBox.left && x <= menuBox.right && y >= menuBox.top && y <= menuBox.bottom;
+    let nextTop = y + 16;
+    for (const tip of shown) {
+      const gap = 16;
+      const width = tip.offsetWidth;
+      const height = tip.offsetHeight;
+      let left = overMenu ? menuBox.right + gap : x + gap;
+      let top = overMenu ? Math.max(8, y - 12) : nextTop;
+      if (left + width > window.innerWidth - 8) left = Math.max(8, (overMenu ? menuBox.left : x) - width - gap);
+      if (top + height > window.innerHeight - 8) top = Math.max(8, (overMenu ? menuBox.bottom : y) - height - gap);
+      if (overMenu) tip.style.position = "fixed";
+      const fixed = overMenu || getComputedStyle(tip).position === "fixed";
+      if (!fixed) {
+        left += window.scrollX;
+        top += window.scrollY;
+      }
+      const mark = left + "," + top;
+      if (tip.dataset.cursor !== mark) {
+        tip.dataset.cursor = mark;
+        tip.style.left = left + "px";
+        tip.style.top = top + "px";
+      }
+      nextTop += height + 8;
+    }
+  }
+  document.addEventListener("mousemove", (event) => {
+    x = event.clientX;
+    y = event.clientY;
+    requestAnimationFrame(place);
+  });
+  new MutationObserver(() => requestAnimationFrame(place)).observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ["style"]
+  });
+})();
+</script>
+</head>
+<body>
+<div id="root"></div>
+<script src="%BASE_URL%config.js"></script>
+<script type="module" src="/src/main.tsx"></script>
+</body>
+</html>

@@ -19,7 +19,7 @@ func main() {
 	}
 	app := &ledger.App{
 		DataPath:  envOr("LEDGER_DATA", filepath.Join(root, "data", "ledger.json")),
-		PublicDir: filepath.Join(root, "public"),
+		PublicDir: filepath.Join(root, "dist"),
 		Remote:    os.Getenv("LEDGER_REMOTE"),
 		Token:     os.Getenv("LEDGER_TOKEN"),
 	}

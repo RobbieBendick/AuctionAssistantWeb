@@ -216,6 +216,9 @@ func (a *App) LocalHandler(findFiles func() []string) http.Handler {
 			return
 		}
 		file := publicFile(a.PublicDir, r.URL.Path)
+		if file == "" && !strings.Contains(filepath.Base(r.URL.Path), ".") {
+			file = publicFile(a.PublicDir, "/")
+		}
 		if file == "" {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
