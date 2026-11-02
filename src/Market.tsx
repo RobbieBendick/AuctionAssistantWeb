@@ -79,10 +79,10 @@ function Chart({ points }: { points: DayPoint[] }) {
       <line className="axis" x1={pad.l} y1={pad.t} x2={pad.l} y2={height - pad.b} />
       <line className="axis" x1={pad.l} y1={height - pad.b} x2={width - pad.r} y2={height - pad.b} />
       <foreignObject x={0} y={yAt(y1) - 9} width={pad.l - 8} height={18}>
-        <div xmlns="http://www.w3.org/1999/xhtml" className="axis-coins"><Coins copper={Math.round(y1)} /></div>
+        <div xmlns="http://www.w3.org/1999/xhtml" className="axis-coins"><Coins copper={Math.round(y1)} compact /></div>
       </foreignObject>
       <foreignObject x={0} y={yAt(y0) - 9} width={pad.l - 8} height={18}>
-        <div xmlns="http://www.w3.org/1999/xhtml" className="axis-coins"><Coins copper={Math.round(y0)} /></div>
+        <div xmlns="http://www.w3.org/1999/xhtml" className="axis-coins"><Coins copper={Math.round(y0)} compact /></div>
       </foreignObject>
       <path className="series" d={line} />
       {points.map((point, index) => (

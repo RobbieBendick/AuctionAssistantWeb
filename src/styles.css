@@ -117,7 +117,7 @@ a.hit.on, a.hit:hover { background: var(--mint-dim); color: var(--ink); }
 .chart .axis { stroke: var(--line); }
 .chart .series { fill: none; stroke: var(--mint); stroke-width: 2; }
 .chart .dot { fill: var(--mint); }
-.chart .tick { fill: var(--muted); font-size: 12px; }
+.chart .tick { fill: var(--muted); font-size: 10px; }
 
 .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 28px 0 18px; }
 
