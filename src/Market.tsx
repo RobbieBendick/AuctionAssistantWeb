@@ -3,6 +3,15 @@ import { Coins } from "./coins";
 import { ledgerApi } from "./ledger";
 import { followLink, go, itemPath } from "./route";
 
+function marketUrl(params: { q?: string; id?: number | string }) {
+  const api = ledgerApi();
+  const query = new URLSearchParams();
+  if (params.id != null && params.id !== "") query.set("id", String(params.id));
+  if (params.q) query.set("q", params.q);
+  const path = `/api/market?${query.toString()}`;
+  return api ? `${api}${path}` : path;
+}
+
 interface DayPoint {
   t: number;
   day: string;
@@ -155,8 +164,11 @@ export function Market() {
       return;
     }
     const timer = window.setTimeout(() => {
-      fetch(`/api/market?q=${encodeURIComponent(q)}`, { cache: "no-store" })
-        .then((res) => res.json() as Promise<{ items?: MarketItem[] }>)
+      fetch(marketUrl({ q }), { cache: "no-store" })
+        .then(async (res) => {
+          if (!res.ok) throw new Error(String(res.status));
+          return res.json() as Promise<{ items?: MarketItem[] }>;
+        })
         .then((data) => {
           const next = data.items || [];
           setItems(next);

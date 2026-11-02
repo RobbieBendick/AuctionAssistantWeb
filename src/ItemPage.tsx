@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
+import { ledgerApi } from "./ledger";
 import { ItemView, Market, type MarketItem } from "./Market";
 import { followLink, homePath } from "./route";
+
+function marketItemUrl(itemId: number) {
+  const api = ledgerApi();
+  const path = `/api/market?id=${itemId}`;
+  return api ? `${api}${path}` : path;
+}
 
 export function ItemPage({ itemId }: { itemId: number }) {
   const [item, setItem] = useState<MarketItem | null>(null);
@@ -10,8 +17,11 @@ export function ItemPage({ itemId }: { itemId: number }) {
     let stop = false;
     setItem(null);
     setNote("Looking up that scan…");
-    fetch(`/api/market?id=${itemId}`, { cache: "no-store" })
-      .then((res) => res.json() as Promise<{ item?: MarketItem | null }>)
+    fetch(marketItemUrl(itemId), { cache: "no-store" })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(String(res.status));
+        return res.json() as Promise<{ item?: MarketItem | null }>;
+      })
       .then((data) => {
         if (stop) return;
         setItem(data.item || null);
