@@ -220,7 +220,7 @@ tr.arrive td { animation: arrive 0.6s ease; }
 .pill.sold { color: #06281a; background: var(--mint); }
 .coins { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .coin { display: inline-flex; align-items: center; gap: 2px; }
-.coin img { width: 1em; height: 1em; image-rendering: pixelated; }
+.coin img { width: 0.72em; height: 0.72em; image-rendering: pixelated; }
 .g { color: #ffd100; }
 .s { color: #e0e0e0; }
 .c { color: #e07a3d; }
