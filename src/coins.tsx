@@ -2,9 +2,8 @@ const GOLD = "https://wow.zamimg.com/images/icons/money-gold.gif";
 const SILVER = "https://wow.zamimg.com/images/icons/money-silver.gif";
 const COPPER = "https://wow.zamimg.com/images/icons/money-copper.gif";
 
-/** Ledger amounts were inheriting 22px from .value; keep money on its own scale. */
-const FONT = 13;
-const ICON = 10;
+const FONT = 16;
+const ICON = 11;
 
 function Denom({
   amount,
@@ -20,11 +19,12 @@ function Denom({
       className={`aa-coin aa-coin-${tone}`}
       style={{
         display: "inline-flex",
-        alignItems: "center",
-        paddingRight: ICON + 2,
+        alignItems: "flex-end",
+        paddingRight: ICON + 3,
+        paddingBottom: 1,
         backgroundImage: `url(${src})`,
         backgroundRepeat: "no-repeat",
-        backgroundPosition: "right center",
+        backgroundPosition: "right 1px",
         backgroundSize: `${ICON}px ${ICON}px`,
         lineHeight: 1,
       }}
@@ -46,12 +46,12 @@ export function Coins({ copper }: { copper: number }) {
       className="aa-coins"
       style={{
         display: "inline-flex",
-        alignItems: "center",
-        gap: 4,
+        alignItems: "flex-end",
+        gap: 5,
         whiteSpace: "nowrap",
         fontSize: FONT,
         fontVariantNumeric: "tabular-nums",
-        lineHeight: 1.2,
+        lineHeight: 1.15,
       }}
     >
       {negative ? <span className="aa-coin-sign">−</span> : null}
@@ -61,4 +61,3 @@ export function Coins({ copper }: { copper: number }) {
     </span>
   );
 }
-

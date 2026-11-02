@@ -129,7 +129,7 @@ a.hit.on, a.hit:hover { background: var(--mint-dim); color: var(--ink); }
 }
 
 .card .label { color: var(--muted); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; }
-.card .value { margin-top: 8px; font-variant-numeric: tabular-nums; }
+.card .value { margin-top: 12px; font-variant-numeric: tabular-nums; }
 .card.net .value { color: var(--mint); }
 .card.spent .value { color: var(--gold); }
 
