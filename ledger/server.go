@@ -1,0 +1,395 @@
+package ledger
+
+import (
+	"bytes"
+	"encoding/json"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+)
+
+const ledgerKey = "AuctionAssistant-ledger"
+
+type App struct {
+	mu        sync.Mutex
+	DataPath  string
+	PublicDir string
+	Remote    string
+	Token     string
+	savedAt   string
+	capture   string
+	lastPush  string
+}
+
+type fileDoc struct {
+	Events  []Event `json:"events"`
+	Summary Summary `json:"summary"`
+}
+
+func (a *App) readStore() []Event {
+	body, err := os.ReadFile(a.DataPath)
+	if err != nil {
+		return []Event{}
+	}
+	var list []Event
+	if json.Unmarshal(body, &list) == nil && list != nil {
+		return list
+	}
+	var doc fileDoc
+	if json.Unmarshal(body, &doc) == nil && doc.Events != nil {
+		return doc.Events
+	}
+	return []Event{}
+}
+
+func (a *App) writeStore(events []Event) error {
+	if events == nil {
+		events = []Event{}
+	}
+	if err := os.MkdirAll(filepath.Dir(a.DataPath), 0o755); err != nil {
+		return err
+	}
+	body, err := json.MarshalIndent(fileDoc{Events: events, Summary: Summarize(events)}, "", "  ")
+	if err != nil {
+		return err
+	}
+	tmp := a.DataPath + ".tmp"
+	if err := os.WriteFile(tmp, body, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, a.DataPath)
+}
+
+func (a *App) pushRemote(events []Event) {
+	if a.Remote == "" || len(events) == 0 {
+		return
+	}
+	ids := make([]string, len(events))
+	for i, event := range events {
+		ids[i] = event.ID
+	}
+	stamp := strings.Join(ids, ",")
+	a.mu.Lock()
+	if stamp == a.lastPush {
+		a.mu.Unlock()
+		return
+	}
+	a.mu.Unlock()
+	payload, _ := json.Marshal(map[string]any{"events": events})
+	req, err := http.NewRequest(http.MethodPost, strings.TrimRight(a.Remote, "/")+"/api/ledger", bytes.NewReader(payload))
+	if err != nil {
+		return
+	}
+	req.Header.Set("content-type", "application/json")
+	if a.Token != "" {
+		req.Header.Set("authorization", "Bearer "+a.Token)
+	}
+	res, err := iconClient.Do(req)
+	if err != nil {
+		return
+	}
+	defer res.Body.Close()
+	io.Copy(io.Discard, res.Body)
+	if res.StatusCode >= 200 && res.StatusCode < 300 {
+		a.mu.Lock()
+		a.lastPush = stamp
+		a.mu.Unlock()
+	}
+}
+
+func (a *App) ImportSaved(files []string) []Event {
+	var incoming []Event
+	var newest time.Time
+	for _, file := range files {
+		info, err := os.Stat(file)
+		if err != nil {
+			continue
+		}
+		if info.ModTime().After(newest) {
+			newest = info.ModTime()
+		}
+		body, err := os.ReadFile(file)
+		if err != nil {
+			continue
+		}
+		incoming = append(incoming, ParseWire(string(body))...)
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if !newest.IsZero() {
+		a.savedAt = newest.UTC().Format("2006-01-02T15:04:05.000Z")
+	}
+	before := a.readStore()
+	events := MergeEvents(before, incoming)
+	if len(events) != len(before) {
+		_ = a.writeStore(events)
+		go a.pushRemote(events)
+	}
+	return events
+}
+
+func (a *App) NoteBarcode(text string) {
+	event, ok := ParseLine(text)
+	if !ok {
+		return
+	}
+	a.mu.Lock()
+	before := a.readStore()
+	events := MergeEvents(before, []Event{event})
+	if len(events) == len(before) {
+		a.mu.Unlock()
+		return
+	}
+	_ = a.writeStore(events)
+	a.savedAt = time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
+	a.mu.Unlock()
+	a.pushRemote(events)
+}
+
+func (a *App) SetCapture(state string) {
+	a.mu.Lock()
+	a.capture = state
+	a.mu.Unlock()
+}
+
+func (a *App) localPayload(watching int) []byte {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	events := a.readStore()
+	var saved *string
+	if a.savedAt != "" {
+		saved = &a.savedAt
+	}
+	capture := a.capture
+	if capture == "" {
+		capture = "off"
+	}
+	body, _ := json.Marshal(struct {
+		Events   []Event `json:"events"`
+		Summary  Summary `json:"summary"`
+		SavedAt  *string `json:"savedAt"`
+		Watching int     `json:"watching"`
+		Capture  string  `json:"capture"`
+	}{events, Summarize(events), saved, watching, capture})
+	return body
+}
+
+func (a *App) LocalHandler(findFiles func() []string) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/ledger", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			writeJSON(w, http.StatusOK, a.localPayload(len(findFiles())))
+			return
+		}
+		if r.Method == http.MethodPost {
+			var body struct {
+				Events []Event `json:"events"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			a.mu.Lock()
+			events := MergeEvents(a.readStore(), body.Events)
+			_ = a.writeStore(events)
+			a.mu.Unlock()
+			writeJSON(w, http.StatusOK, a.localPayload(len(findFiles())))
+			return
+		}
+		http.Error(w, "Not found", http.StatusNotFound)
+	})
+	mux.HandleFunc("/icon/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+		id := strings.TrimPrefix(r.URL.Path, "/icon/")
+		file, err := LoadIcon(filepath.Join(filepath.Dir(a.DataPath), "icons"), id)
+		if err != nil {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+		http.ServeFile(w, r, file)
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+		file := publicFile(a.PublicDir, r.URL.Path)
+		if file == "" {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("cache-control", "no-store")
+		http.ServeFile(w, r, file)
+	})
+	return mux
+}
+
+func publicFile(root, urlPath string) string {
+	rel := strings.TrimPrefix(urlPath, "/")
+	if rel == "" {
+		rel = "index.html"
+	}
+	if strings.Contains(rel, "..") {
+		return ""
+	}
+	file := filepath.Join(root, filepath.FromSlash(rel))
+	cleanRoot := filepath.Clean(root)
+	cleanFile := filepath.Clean(file)
+	if cleanFile != cleanRoot && !strings.HasPrefix(cleanFile, cleanRoot+string(os.PathSeparator)) {
+		return ""
+	}
+	info, err := os.Stat(cleanFile)
+	if err != nil || info.IsDir() {
+		return ""
+	}
+	return cleanFile
+}
+
+func cors(w http.ResponseWriter) {
+	h := w.Header()
+	h.Set("access-control-allow-origin", "*")
+	h.Set("access-control-allow-methods", "GET, POST, OPTIONS")
+	h.Set("access-control-allow-headers", "authorization, content-type")
+	h.Set("access-control-max-age", "86400")
+}
+
+func writeJSON(w http.ResponseWriter, status int, body []byte) {
+	w.Header().Set("content-type", "application/json; charset=utf-8")
+	w.Header().Set("cache-control", "no-store")
+	w.WriteHeader(status)
+	_, _ = w.Write(body)
+}
+
+func (a *App) APIHandler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/ledger", a.serveLedger)
+	mux.HandleFunc("/api/icon/", a.serveIcon)
+	return mux
+}
+
+func (a *App) serveLedger(w http.ResponseWriter, r *http.Request) {
+	cors(w)
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	header := r.Header.Get("authorization")
+	if !BearerOk(header, os.Getenv("LEDGER_TOKEN")) {
+		writeJSON(w, http.StatusUnauthorized, []byte(`{"error":"unauthorized"}`))
+		return
+	}
+	if os.Getenv("UPSTASH_REDIS_REST_URL") == "" || os.Getenv("UPSTASH_REDIS_REST_TOKEN") == "" {
+		writeJSON(w, http.StatusServiceUnavailable, []byte(`{"error":"Connect Upstash Redis on the Vercel project."}`))
+		return
+	}
+	raw, err := redisDo([]any{"GET", ledgerKey})
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, errorJSON(err))
+		return
+	}
+	events := []Event{}
+	if raw != "" && raw != "null" {
+		_ = json.Unmarshal([]byte(raw), &events)
+	}
+	if r.Method == http.MethodPost {
+		var body struct {
+			Events []Event `json:"events"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		events = MergeEvents(events, body.Events)
+		encoded, _ := json.Marshal(events)
+		if _, err := redisDo([]any{"SET", ledgerKey, string(encoded)}); err != nil {
+			writeJSON(w, http.StatusBadGateway, errorJSON(err))
+			return
+		}
+	} else if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, []byte(`{"error":"method"}`))
+		return
+	}
+	body, _ := json.Marshal(struct {
+		Events  []Event `json:"events"`
+		Summary Summary `json:"summary"`
+	}{events, Summarize(events)})
+	writeJSON(w, http.StatusOK, body)
+}
+
+func (a *App) serveIcon(w http.ResponseWriter, r *http.Request) {
+	cors(w)
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	id := strings.TrimPrefix(r.URL.Path, "/api/icon/")
+	if !itemID.MatchString(id) {
+		http.Error(w, "Not found", http.StatusNotFound)
+		return
+	}
+	icon, _ := redisString([]any{"GET", "AuctionAssistant-icon:" + id})
+	if icon == "" {
+		tip, err := fetchBytes("https://nether.wowhead.com/tooltip/item/" + id)
+		if err != nil {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+		icon = IconFromTooltip(string(tip))
+		if icon == "" {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+		_, _ = redisDo([]any{"SET", "AuctionAssistant-icon:" + id, icon})
+	}
+	w.Header().Set("location", "https://wow.zamimg.com/images/wow/icons/large/"+icon+".jpg")
+	w.Header().Set("cache-control", "public, max-age=86400")
+	w.WriteHeader(http.StatusFound)
+}
+
+func errorJSON(err error) []byte {
+	body, _ := json.Marshal(map[string]string{"error": err.Error()})
+	return body
+}
+
+func redisDo(command []any) (string, error) {
+	url := os.Getenv("UPSTASH_REDIS_REST_URL")
+	token := os.Getenv("UPSTASH_REDIS_REST_TOKEN")
+	if url == "" || token == "" {
+		return "", nil
+	}
+	payload, _ := json.Marshal(command)
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(payload))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("authorization", "Bearer "+token)
+	req.Header.Set("content-type", "application/json")
+	res, err := iconClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer res.Body.Close()
+	body, _ := io.ReadAll(res.Body)
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		return "", os.ErrInvalid
+	}
+	var wrapped struct {
+		Result json.RawMessage `json:"result"`
+	}
+	if json.Unmarshal(body, &wrapped) != nil {
+		return "", os.ErrInvalid
+	}
+	if len(wrapped.Result) == 0 || string(wrapped.Result) == "null" {
+		return "", nil
+	}
+	var text string
+	if json.Unmarshal(wrapped.Result, &text) == nil {
+		return text, nil
+	}
+	return string(wrapped.Result), nil
+}
+
+func redisString(command []any) (string, error) {
+	return redisDo(command)
+}

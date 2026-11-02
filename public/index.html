@@ -57,6 +57,8 @@
   .card.net .value { color: var(--mint); }
   .card.spent .value { color: var(--gold); }
   .filters { display: flex; gap: 8px; margin: 8px 0 14px; flex-wrap: wrap; }
+  .who-label { color: var(--muted); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; margin-top: 8px; }
+  #who-wrap[hidden] { display: none; }
   .gate { display: flex; gap: 8px; margin: 18px 0 0; }
   .gate[hidden] { display: none; }
   .desk { margin-top: 16px; color: var(--muted); }
@@ -102,7 +104,7 @@
   tr:last-child td { border-bottom: 0; }
   .num { text-align: right; font-variant-numeric: tabular-nums; }
   .who { color: var(--muted); font-size: 13px; }
-  .item { display: flex; align-items: center; gap: 10px; }
+  .item { display: flex; align-items: center; gap: 10px; color: inherit; text-decoration: none; }
   .icon {
     width: 36px; height: 36px; flex: none;
     border-radius: 6px;
@@ -130,6 +132,46 @@
     .sync { text-align: left; }
   }
 </style>
+<script>const whTooltips = {colorLinks: false, iconizeLinks: false, renameLinks: false};</script>
+<script src="https://wow.zamimg.com/widgets/power.js"></script>
+<script>
+(function () {
+  let x = 0;
+  let y = 0;
+  function place() {
+    const tip = document.getElementById("wowhead-tooltip");
+    if (!tip || tip.offsetWidth === 0) return;
+    const gap = 16;
+    const width = tip.offsetWidth;
+    const height = tip.offsetHeight;
+    let left = x + gap;
+    let top = y + gap;
+    if (left + width > window.innerWidth - 8) left = Math.max(8, x - width - gap);
+    if (top + height > window.innerHeight - 8) top = Math.max(8, y - height - gap);
+    const fixed = getComputedStyle(tip).position === "fixed";
+    if (!fixed) {
+      left += window.scrollX;
+      top += window.scrollY;
+    }
+    const mark = left + "," + top;
+    if (tip.dataset.cursor === mark) return;
+    tip.dataset.cursor = mark;
+    tip.style.left = left + "px";
+    tip.style.top = top + "px";
+  }
+  document.addEventListener("mousemove", (event) => {
+    x = event.clientX;
+    y = event.clientY;
+    requestAnimationFrame(place);
+  });
+  new MutationObserver(() => requestAnimationFrame(place)).observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ["style"]
+  });
+})();
+</script>
 </head>
 <body>
 <main>
@@ -157,7 +199,10 @@
     <article class="card spent"><div class="label">Bought</div><div class="value" id="bought">—</div></article>
     <article class="card"><div class="label">Posted</div><div class="value" id="posted">—</div></article>
   </section>
-  <div class="filters" id="people" hidden></div>
+  <div id="who-wrap" hidden>
+    <div class="who-label">Characters</div>
+    <div class="filters" id="people"></div>
+  </div>
   <div class="filters" id="filters">
     <button class="on" data-kind="all">All</button>
     <button data-kind="sold">Sold</button>
@@ -167,7 +212,7 @@
   <section class="panel">
     <table>
       <thead>
-        <tr><th>When</th><th>Action</th><th>Item</th><th class="num">Qty</th><th class="num">Amount</th></tr>
+        <tr><th>When</th><th>Action</th><th>Item</th><th class="num">Qty</th><th class="num">Price</th></tr>
       </thead>
       <tbody id="rows"></tbody>
     </table>
@@ -238,12 +283,14 @@ function renderPeople() {
     }
   }
   const row = document.getElementById("people");
-  if (names.length < 2) {
-    row.hidden = true;
+  const wrap = document.getElementById("who-wrap");
+  if (!names.length) {
+    wrap.hidden = true;
     state.who = "all";
     return;
   }
   if (state.who !== "all" && !names.includes(state.who)) state.who = "all";
+  wrap.hidden = false;
   row.hidden = false;
   const wanted = ["all", ...names];
   const have = [...row.querySelectorAll("button")].map(button => button.dataset.who);
@@ -283,14 +330,21 @@ function render() {
     const tr = document.createElement("tr");
     const who = [ev.character, ev.realm].filter(Boolean).join(" · ");
     const src = iconSrc(ev);
+    const icon = src ? `<img class="icon" alt="" width="36" height="36" src="${src}" onerror="this.remove()">` : "";
+    const id = Number(ev.itemId);
+    const item = `<div>${escapeHtml(ev.name)}<div class="who">${escapeHtml(who)}</div></div>`;
+    const cell = id
+      ? `<a class="item" target="_blank" rel="noreferrer" href="https://www.wowhead.com/tbc/item=${id}" data-wowhead="item=${id}&amp;domain=tbc">${icon}${item}</a>`
+      : `<div class="item">${icon}${item}</div>`;
     tr.innerHTML = `
       <td>${when(ev.t)}</td>
       <td><span class="pill ${ev.kind}">${ev.kind === "post" ? "Post" : ev.kind === "buy" ? "Buy" : "Sold"}</span></td>
-      <td><div class="item">${src ? `<img class="icon" alt="" width="36" height="36" src="${src}" onerror="this.remove()">` : ""}<div>${escapeHtml(ev.name)}<div class="who">${escapeHtml(who)}</div></div></div></td>
+      <td>${cell}</td>
       <td class="num">${ev.count ? ev.count : ""}</td>
       <td class="num">${coins(ev.copper)}</td>`;
     body.appendChild(tr);
   }
+  if (window.$WowheadPower) window.$WowheadPower.refreshLinks();
   document.getElementById("empty").hidden = rows.length > 0;
   const sync = document.getElementById("sync");
   if (API) sync.textContent = "Shared ledger.";
