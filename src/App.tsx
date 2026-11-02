@@ -11,6 +11,7 @@ import {
   iconSrc,
   ledgerApi,
   postEnds,
+  resolveItemId,
   whenLabel,
   type AuctionEvent,
   type KindFilter,
@@ -186,7 +187,7 @@ function Ledger() {
           </thead>
           <tbody>
             {rows.map((ev) => (
-              <Row key={ev.id} ev={ev} api={api} now={now} canceled={canceled.has(ev.id)} fresh={fresh.has(ev.id)} />
+              <Row key={ev.id} ev={ev} events={events} api={api} now={now} canceled={canceled.has(ev.id)} fresh={fresh.has(ev.id)} />
             ))}
           </tbody>
         </table>
@@ -196,10 +197,10 @@ function Ledger() {
   );
 }
 
-function Row({ ev, api, now, canceled, fresh }: { ev: AuctionEvent; api: string; now: number; canceled: boolean; fresh: boolean }) {
-  const src = iconSrc(ev, api);
+function Row({ ev, events, api, now, canceled, fresh }: { ev: AuctionEvent; events: AuctionEvent[]; api: string; now: number; canceled: boolean; fresh: boolean }) {
+  const itemId = resolveItemId(ev, events);
+  const src = iconSrc(ev, api, itemId);
   const ends = canceled ? 0 : postEnds(ev, new Set(canceled ? [ev.id] : []));
-  const itemId = Number(ev.itemId);
   const body = (
     <>
       {src ? <img className="icon" alt="" width={36} height={36} src={src} onError={(event) => event.currentTarget.remove()} /> : null}

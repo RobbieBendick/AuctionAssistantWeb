@@ -95,11 +95,24 @@ export function whenLabel(t: number): string {
   });
 }
 
-export function iconSrc(ev: AuctionEvent, api: string): string {
+/** Mail "sold" rows may only have a name; reuse an id from a post/buy of the same item. */
+export function resolveItemId(ev: AuctionEvent, events: AuctionEvent[]): number {
+  const own = Number(ev.itemId);
+  if (own > 0) return own;
+  const needle = (ev.name || "").trim().toLowerCase();
+  if (!needle) return 0;
+  for (const other of events) {
+    const id = Number(other.itemId);
+    if (id > 0 && (other.name || "").trim().toLowerCase() === needle) return id;
+  }
+  return 0;
+}
+
+export function iconSrc(ev: AuctionEvent, api: string, itemId = Number(ev.itemId)): string {
   if (ev.icon && /^[a-z0-9_]+$/.test(ev.icon)) {
     return `https://wow.zamimg.com/images/wow/icons/large/${ev.icon}.jpg`;
   }
-  const id = Number(ev.itemId);
+  const id = Number(itemId);
   if (!id) return "";
   if (api) return `${api}/api/icon/${id}`;
   return `/icon/${id}`;
