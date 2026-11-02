@@ -1,0 +1,10 @@
+{
+  "name": "AuctionAssistant-web",
+  "private": true,
+  "version": "0.1.0",
+  "description": "AuctionAssistant ledger site and API.",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test tests/ledger_test.js"
+  }
+}

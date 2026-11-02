@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AuctionAssistant</title>
+<style>
+  :root {
+    --bg: #0c0e12;
+    --panel: #12151b;
+    --card: #181c24;
+    --line: #2a3140;
+    --ink: #eceef2;
+    --muted: #8b93a1;
+    --mint: #52db9e;
+    --mint-dim: rgba(82, 219, 158, 0.14);
+    --gold: #e3c261;
+    --gold-dim: rgba(227, 194, 97, 0.14);
+    --rose: #e07a7a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background:
+      radial-gradient(900px 420px at 10% -10%, rgba(82, 219, 158, 0.08), transparent 60%),
+      var(--bg);
+    color: var(--ink);
+    font: 15px/1.45 "Segoe UI", sans-serif;
+  }
+  main { max-width: 1080px; margin: 0 auto; padding: 36px 24px 64px; }
+  header { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
+  h1 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  h1 span {
+    display: inline-block;
+    width: 3px; height: 16px;
+    margin-right: 10px;
+    background: var(--mint);
+    vertical-align: -1px;
+    border-radius: 2px;
+  }
+  .sync { color: var(--muted); font-size: 13px; text-align: right; }
+  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 28px 0 18px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px 18px 14px;
+  }
+  .card .label { color: var(--muted); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; }
+  .card .value { margin-top: 8px; font-size: 22px; font-variant-numeric: tabular-nums; }
+  .card.net .value { color: var(--mint); }
+  .card.spent .value { color: var(--gold); }
+  .filters { display: flex; gap: 8px; margin: 8px 0 14px; flex-wrap: wrap; }
+  .gate { display: flex; gap: 8px; margin: 18px 0 0; }
+  .gate[hidden] { display: none; }
+  .desk { margin-top: 16px; color: var(--muted); }
+  .desk[hidden] { display: none; }
+  .desk summary { cursor: pointer; margin-bottom: 8px; }
+  .gate input {
+    width: min(280px, 100%);
+    background: var(--card);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 6px 14px;
+    font: inherit;
+  }
+  button {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 6px 12px;
+    font: inherit;
+    cursor: pointer;
+  }
+  button.on { color: var(--ink); border-color: var(--mint); background: var(--mint-dim); }
+  .panel {
+    background: var(--panel);
+    border: 1px solid rgba(82, 219, 158, 0.28);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    text-align: left;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  td { padding: 13px 16px; border-bottom: 1px solid rgba(42, 49, 64, 0.7); vertical-align: middle; }
+  tr:last-child td { border-bottom: 0; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .who { color: var(--muted); font-size: 13px; }
+  .item { display: flex; align-items: center; gap: 10px; }
+  .icon {
+    width: 36px; height: 36px; flex: none;
+    border-radius: 6px;
+    background: #0c0e12;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  }
+  .pill {
+    display: inline-block;
+    min-width: 58px;
+    text-align: center;
+    border-radius: 999px;
+    padding: 3px 8px;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .pill.post { color: var(--mint); background: var(--mint-dim); }
+  .pill.buy { color: var(--gold); background: var(--gold-dim); }
+  .pill.sold { color: #06281a; background: var(--mint); }
+  .g { color: #ffd100; } .s { color: #e0e0e0; } .c { color: #e07a3d; }
+  .empty { padding: 64px 24px; text-align: center; color: var(--muted); }
+  @media (max-width: 800px) {
+    .cards { grid-template-columns: 1fr 1fr; }
+    header { flex-direction: column; align-items: flex-start; }
+    .sync { text-align: left; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1><span></span>AuctionAssistant</h1>
+    <div class="sync" id="sync">Reading the game log…</div>
+    <div class="who" id="addon"></div>
+  </header>
+  <form class="gate" id="gate" hidden>
+    <input id="token" type="password" placeholder="Ledger token" autocomplete="off">
+    <button type="submit">Unlock</button>
+  </form>
+  <details id="desk" class="desk" hidden>
+    <summary>Send to the shared ledger</summary>
+    <form id="desk-form" class="gate">
+      <input id="desk-remote" placeholder="https://your-app.vercel.app" autocomplete="off">
+      <input id="desk-token" type="password" placeholder="Ledger token" autocomplete="off">
+      <button type="submit">Save</button>
+    </form>
+    <div class="who" id="desk-status"></div>
+  </details>
+  <section class="cards">
+    <article class="card net"><div class="label">Net</div><div class="value" id="net">—</div></article>
+    <article class="card"><div class="label">Sold</div><div class="value" id="sold">—</div></article>
+    <article class="card spent"><div class="label">Bought</div><div class="value" id="bought">—</div></article>
+    <article class="card"><div class="label">Posted</div><div class="value" id="posted">—</div></article>
+  </section>
+  <div class="filters" id="people" hidden></div>
+  <div class="filters" id="filters">
+    <button class="on" data-kind="all">All</button>
+    <button data-kind="sold">Sold</button>
+    <button data-kind="buy">Bought</button>
+    <button data-kind="post">Posted</button>
+  </div>
+  <section class="panel">
+    <table>
+      <thead>
+        <tr><th>When</th><th>Action</th><th>Item</th><th class="num">Qty</th><th class="num">Amount</th></tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="empty" id="empty" hidden>No auctions yet. Accept a buyout in game and it is sent here as a barcode.</div>
+  </section>
+</main>
+<script src="config.js"></script>
+<script>
+const API = String(window.LEDGER_API || "").replace(/\/$/, "");
+const state = {
+  events: [],
+  kind: "all",
+  who: "all",
+  savedAt: null,
+  watching: 0,
+  capture: "off",
+  addon: "",
+  token: localStorage.getItem("aa-ledger-token") || "",
+};
+
+function coins(copper) {
+  copper = Math.floor(Number(copper) || 0);
+  const sign = copper < 0 ? "−" : "";
+  copper = Math.abs(copper);
+  const g = Math.floor(copper / 10000);
+  const s = Math.floor((copper % 10000) / 100);
+  const c = copper % 100;
+  const bits = [];
+  if (g) bits.push(`<span class="g">${g}g</span>`);
+  if (s || g) bits.push(`<span class="s">${s}s</span>`);
+  bits.push(`<span class="c">${c}c</span>`);
+  return sign + bits.join(" ");
+}
+
+function when(t) {
+  if (!t) return "";
+  const d = new Date(t * 1000);
+  return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function iconSrc(ev) {
+  if (ev.icon && /^[a-z0-9_]+$/.test(ev.icon)) {
+    return "https://wow.zamimg.com/images/wow/icons/large/" + ev.icon + ".jpg";
+  }
+  const id = Number(ev.itemId);
+  if (!id) return "";
+  if (window.ledgerDesktop) return "";
+  if (API) return API + "/api/icon/" + id;
+  return "/icon/" + id;
+}
+
+function visibleEvents() {
+  return state.events.filter(ev => {
+    if (state.kind !== "all" && ev.kind !== state.kind) return false;
+    if (state.who !== "all" && (ev.character || "Unknown") !== state.who) return false;
+    return true;
+  });
+}
+
+function renderPeople() {
+  const names = [];
+  const seen = new Set();
+  for (const ev of state.events) {
+    const name = ev.character || "Unknown";
+    if (!seen.has(name)) {
+      seen.add(name);
+      names.push(name);
+    }
+  }
+  const row = document.getElementById("people");
+  if (names.length < 2) {
+    row.hidden = true;
+    state.who = "all";
+    return;
+  }
+  if (state.who !== "all" && !names.includes(state.who)) state.who = "all";
+  row.hidden = false;
+  const wanted = ["all", ...names];
+  const have = [...row.querySelectorAll("button")].map(button => button.dataset.who);
+  if (have.join("\n") === wanted.join("\n")) {
+    for (const button of row.querySelectorAll("button")) {
+      button.classList.toggle("on", button.dataset.who === state.who);
+    }
+    return;
+  }
+  row.replaceChildren();
+  for (const name of wanted) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.who = name;
+    button.textContent = name === "all" ? "Everyone" : name;
+    button.classList.toggle("on", name === state.who);
+    row.appendChild(button);
+  }
+}
+
+function render() {
+  const rows = visibleEvents();
+  const summary = rows.reduce((s, ev) => {
+    if (ev.kind === "post") s.posted += ev.copper;
+    else if (ev.kind === "buy") s.bought += ev.copper;
+    else if (ev.kind === "sold") s.sold += ev.copper;
+    return s;
+  }, { posted: 0, bought: 0, sold: 0 });
+  document.getElementById("net").innerHTML = coins(summary.sold - summary.bought);
+  document.getElementById("sold").innerHTML = coins(summary.sold);
+  document.getElementById("bought").innerHTML = coins(summary.bought);
+  document.getElementById("posted").innerHTML = coins(summary.posted);
+  renderPeople();
+  const body = document.getElementById("rows");
+  body.replaceChildren();
+  for (const ev of rows) {
+    const tr = document.createElement("tr");
+    const who = [ev.character, ev.realm].filter(Boolean).join(" · ");
+    const src = iconSrc(ev);
+    tr.innerHTML = `
+      <td>${when(ev.t)}</td>
+      <td><span class="pill ${ev.kind}">${ev.kind === "post" ? "Post" : ev.kind === "buy" ? "Buy" : "Sold"}</span></td>
+      <td><div class="item">${src ? `<img class="icon" alt="" width="36" height="36" src="${src}" onerror="this.remove()">` : ""}<div>${escapeHtml(ev.name)}<div class="who">${escapeHtml(who)}</div></div></div></td>
+      <td class="num">${ev.count ? ev.count : ""}</td>
+      <td class="num">${coins(ev.copper)}</td>`;
+    body.appendChild(tr);
+  }
+  document.getElementById("empty").hidden = rows.length > 0;
+  const sync = document.getElementById("sync");
+  if (API) sync.textContent = "Shared ledger.";
+  else if (state.capture === "attached") sync.textContent = "Watching the game window. A buyout shows up as soon as the barcode is read.";
+  else if (state.capture === "waiting") sync.textContent = "Waiting for the TBC window. Buys are sent as a barcode when the purchase goes through.";
+  else if (!state.savedAt) sync.textContent = "Barcode capture is off. /reload still sends rows from the saved file.";
+  else sync.textContent = "Last row " + new Date(state.savedAt).toLocaleString() + ".";
+  const addon = document.getElementById("addon");
+  if (addon) addon.textContent = state.addon || "";
+}
+
+function escapeHtml(value) {
+  return String(value || "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+}
+
+document.getElementById("filters").addEventListener("click", (event) => {
+  const button = event.target.closest("button");
+  if (!button) return;
+  state.kind = button.dataset.kind;
+  for (const el of event.currentTarget.children) el.classList.toggle("on", el === button);
+  render();
+});
+
+document.getElementById("people").addEventListener("click", (event) => {
+  const button = event.target.closest("button");
+  if (!button) return;
+  state.who = button.dataset.who || "all";
+  render();
+});
+
+document.getElementById("gate").addEventListener("submit", (event) => {
+  event.preventDefault();
+  state.token = document.getElementById("token").value.trim();
+  localStorage.setItem("aa-ledger-token", state.token);
+  document.getElementById("gate").hidden = true;
+  refresh().catch(() => {
+    document.getElementById("sync").textContent = "Could not reach the ledger.";
+  });
+});
+
+async function refresh() {
+  if (window.ledgerDesktop) {
+    const data = await window.ledgerDesktop.state();
+    state.events = data.events || [];
+    state.savedAt = data.savedAt;
+    state.capture = data.capture || "off";
+    state.addon = data.addon || "";
+    render();
+    return;
+  }
+  const sync = document.getElementById("sync");
+  if (!API && location.hostname.endsWith("github.io")) {
+    sync.textContent = "Set LEDGER_API in config.js to the Vercel URL.";
+    return;
+  }
+  if (API && !state.token) {
+    document.getElementById("gate").hidden = false;
+    sync.textContent = "Enter the ledger token. Each friend's desktop uses the same token.";
+    return;
+  }
+  const headers = {};
+  if (API && state.token) headers.authorization = "Bearer " + state.token;
+  const res = await fetch((API || "") + "/api/ledger", { cache: "no-store", headers });
+  if (res.status === 401) {
+    document.getElementById("gate").hidden = false;
+    sync.textContent = "That token was rejected.";
+    return;
+  }
+  if (!res.ok) throw new Error(String(res.status));
+  document.getElementById("gate").hidden = true;
+  const data = await res.json();
+  state.events = data.events || [];
+  state.savedAt = data.savedAt;
+  state.watching = data.watching || 0;
+  state.capture = data.capture || "off";
+  render();
+}
+
+async function start() {
+  if (window.__TAURI_INTERNALS__) {
+    const { invoke } = await import("@tauri-apps/api/core");
+    window.ledgerDesktop = {
+      state: () => invoke("ledger_state"),
+      settings: () => invoke("get_settings"),
+      save: (settings) => invoke("save_settings", { settings }),
+    };
+    const desk = document.getElementById("desk");
+    desk.hidden = false;
+    const settings = await window.ledgerDesktop.settings();
+    document.getElementById("desk-remote").value = settings.remote || "";
+    document.getElementById("desk-token").value = settings.token || "";
+    document.getElementById("desk-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      await window.ledgerDesktop.save({
+        remote: document.getElementById("desk-remote").value.trim(),
+        token: document.getElementById("desk-token").value.trim(),
+      });
+      document.getElementById("desk-status").textContent = "Saved. New auctions are sent to the shared ledger.";
+    });
+  }
+  refresh().catch(() => {
+    document.getElementById("sync").textContent = "The ledger site is not running.";
+  });
+  setInterval(() => refresh().catch(() => {}), 3000);
+}
+
+start();
+</script>
+</body>
+</html>
