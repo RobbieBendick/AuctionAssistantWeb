@@ -108,6 +108,29 @@ export function resolveItemId(ev: AuctionEvent, events: AuctionEvent[]): number 
   return 0;
 }
 
+/** Seller invoices often omit stack size; reuse a matching post's count. */
+export function resolveCount(ev: AuctionEvent, events: AuctionEvent[]): number {
+  const own = Number(ev.count) || 0;
+  if (own > 0 || ev.kind !== "sold") return own;
+  const needle = (ev.name || "").trim().toLowerCase();
+  if (!needle) return 0;
+  const itemId = resolveItemId(ev, events);
+  const copper = Number(ev.copper) || 0;
+  let fallback = 0;
+  for (const other of events) {
+    if (other.kind !== "post") continue;
+    const count = Number(other.count) || 0;
+    if (count <= 0 || (other.name || "").trim().toLowerCase() !== needle) continue;
+    const otherId = Number(other.itemId) || 0;
+    if (itemId > 0 && otherId > 0 && otherId !== itemId) continue;
+    const buyout = Number(other.copper) || 0;
+    const cutOk = buyout > 0 && copper > 0 && copper <= buyout && (buyout - copper) * 100 <= buyout * 6;
+    if (copper === buyout || cutOk) return count;
+    if (!fallback) fallback = count;
+  }
+  return fallback;
+}
+
 export function iconSrc(ev: AuctionEvent, api: string, itemId = Number(ev.itemId)): string {
   if (ev.icon && /^[a-z0-9_]+$/.test(ev.icon)) {
     return `https://wow.zamimg.com/images/wow/icons/large/${ev.icon}.jpg`;

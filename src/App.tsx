@@ -11,6 +11,7 @@ import {
   iconSrc,
   ledgerApi,
   postEnds,
+  resolveCount,
   resolveItemId,
   whenLabel,
   type AuctionEvent,
@@ -199,6 +200,7 @@ function Ledger() {
 
 function Row({ ev, events, api, now, canceled, fresh }: { ev: AuctionEvent; events: AuctionEvent[]; api: string; now: number; canceled: boolean; fresh: boolean }) {
   const itemId = resolveItemId(ev, events);
+  const count = resolveCount(ev, events);
   const src = iconSrc(ev, api, itemId);
   const ends = canceled ? 0 : postEnds(ev, new Set(canceled ? [ev.id] : []));
   const body = (
@@ -228,7 +230,7 @@ function Row({ ev, events, api, now, canceled, fresh }: { ev: AuctionEvent; even
           ) : null}
         </div>
       </td>
-      <td className="num">{ev.count ? ev.count : ""}</td>
+      <td className="num">{count ? count : ""}</td>
       <td className="num"><Coins copper={ev.copper} /></td>
     </tr>
   );
