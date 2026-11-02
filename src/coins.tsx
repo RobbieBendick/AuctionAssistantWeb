@@ -1,10 +1,11 @@
 const GOLD = "https://wow.zamimg.com/images/icons/money-gold.gif";
 const SILVER = "https://wow.zamimg.com/images/icons/money-silver.gif";
 const COPPER = "https://wow.zamimg.com/images/icons/money-copper.gif";
-const ICON = { width: 8, height: 8, imageRendering: "pixelated" as const, display: "inline-block" };
+const SIZE = 5;
+const ICON = { width: SIZE, height: SIZE, imageRendering: "pixelated" as const, display: "block", flex: "none" };
 
 function CoinIcon({ src }: { src: string }) {
-  return <img alt="" src={src} width={8} height={8} style={ICON} />;
+  return <img alt="" src={src} width={SIZE} height={SIZE} style={ICON} />;
 }
 
 export function Coins({ copper }: { copper: number }) {

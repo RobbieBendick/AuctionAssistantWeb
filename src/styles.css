@@ -218,8 +218,8 @@ tr.arrive td { animation: arrive 0.6s ease; }
 .pill.cancel { color: var(--rose); background: rgba(224, 122, 122, 0.16); }
 .pill.buy { color: var(--gold); background: var(--gold-dim); }
 .pill.sold { color: #06281a; background: var(--mint); }
-.coins { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.coin { display: inline-flex; align-items: center; gap: 2px; }
+.coins { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.coin { display: inline-flex; align-items: center; gap: 1px; }
 .g { color: #ffd100; }
 .s { color: #e0e0e0; }
 .c { color: #e07a3d; }
