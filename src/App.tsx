@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ItemPage } from "./ItemPage";
 import { Market } from "./Market";
 import { Coins } from "./coins";
-import { itemIdFromPath, usePath } from "./route";
+import { followLink, itemIdFromPath, itemPath, usePath } from "./route";
 import {
   actionName,
   actorName,
@@ -218,7 +218,12 @@ function Row({ ev, events, api, now, canceled, fresh }: { ev: AuctionEvent; even
       <td>
         <div className="line">
           {itemId > 0 ? (
-            <a className="item" target="_blank" rel="noreferrer" href={`https://www.wowhead.com/tbc/item=${itemId}`} data-wowhead={`item=${itemId}&domain=tbc`}>
+            <a
+              className="item"
+              href={itemPath(itemId)}
+              data-wowhead={`item=${itemId}&domain=tbc`}
+              onClick={(event) => followLink(event, itemPath(itemId))}
+            >
               {body}
             </a>
           ) : (
