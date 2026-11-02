@@ -59,20 +59,6 @@
   .filters { display: flex; gap: 8px; margin: 8px 0 14px; flex-wrap: wrap; }
   .who-label { color: var(--muted); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; margin-top: 8px; }
   #who-wrap[hidden] { display: none; }
-  .gate { display: flex; gap: 8px; margin: 18px 0 0; }
-  .gate[hidden] { display: none; }
-  .desk { margin-top: 16px; color: var(--muted); }
-  .desk[hidden] { display: none; }
-  .desk summary { cursor: pointer; margin-bottom: 8px; }
-  .gate input {
-    width: min(280px, 100%);
-    background: var(--card);
-    color: var(--ink);
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    padding: 6px 14px;
-    font: inherit;
-  }
   button {
     background: transparent;
     color: var(--muted);
@@ -188,22 +174,9 @@
 <main>
   <header>
     <h1><span></span>AuctionAssistant</h1>
-    <div class="sync" id="sync">Reading the game log…</div>
+    <div class="sync" id="sync">Reading the ledger…</div>
     <div class="who" id="addon"></div>
   </header>
-  <form class="gate" id="gate" hidden>
-    <input id="token" type="password" placeholder="Ledger token" autocomplete="off">
-    <button type="submit">Unlock</button>
-  </form>
-  <details id="desk" class="desk" hidden>
-    <summary>Send to the shared ledger</summary>
-    <form id="desk-form" class="gate">
-      <input id="desk-remote" placeholder="https://your-app.vercel.app" autocomplete="off">
-      <input id="desk-token" type="password" placeholder="Ledger token" autocomplete="off">
-      <button type="submit">Save</button>
-    </form>
-    <div class="who" id="desk-status"></div>
-  </details>
   <section class="cards">
     <article class="card net"><div class="label">Net</div><div class="value" id="net">—</div></article>
     <article class="card"><div class="label">Sold</div><div class="value" id="sold">—</div></article>
@@ -241,7 +214,6 @@ const state = {
   watching: 0,
   capture: "off",
   addon: "",
-  token: localStorage.getItem("aa-ledger-token") || "",
 };
 
 function coins(copper) {
@@ -270,7 +242,6 @@ function iconSrc(ev) {
   }
   const id = Number(ev.itemId);
   if (!id) return "";
-  if (window.ledgerDesktop) return "";
   if (API) return API + "/api/icon/" + id;
   return "/icon/" + id;
 }
@@ -386,46 +357,14 @@ document.getElementById("people").addEventListener("click", (event) => {
   render();
 });
 
-document.getElementById("gate").addEventListener("submit", (event) => {
-  event.preventDefault();
-  state.token = document.getElementById("token").value.trim();
-  localStorage.setItem("aa-ledger-token", state.token);
-  document.getElementById("gate").hidden = true;
-  refresh().catch(() => {
-    document.getElementById("sync").textContent = "Could not reach the ledger.";
-  });
-});
-
 async function refresh() {
-  if (window.ledgerDesktop) {
-    const data = await window.ledgerDesktop.state();
-    state.events = data.events || [];
-    state.savedAt = data.savedAt;
-    state.capture = data.capture || "off";
-    state.addon = data.addon || "";
-    render();
-    return;
-  }
   const sync = document.getElementById("sync");
   if (!API && location.hostname.endsWith("github.io")) {
-    sync.textContent = "Set LEDGER_API in config.js to the Vercel URL.";
+    sync.textContent = "The shared ledger is not connected yet.";
     return;
   }
-  if (API && !state.token) {
-    document.getElementById("gate").hidden = false;
-    sync.textContent = "Enter the ledger token. Each friend's desktop uses the same token.";
-    return;
-  }
-  const headers = {};
-  if (API && state.token) headers.authorization = "Bearer " + state.token;
-  const res = await fetch((API || "") + "/api/ledger", { cache: "no-store", headers });
-  if (res.status === 401) {
-    document.getElementById("gate").hidden = false;
-    sync.textContent = "That token was rejected.";
-    return;
-  }
+  const res = await fetch((API || "") + "/api/ledger", { cache: "no-store" });
   if (!res.ok) throw new Error(String(res.status));
-  document.getElementById("gate").hidden = true;
   const data = await res.json();
   state.events = data.events || [];
   state.savedAt = data.savedAt;
@@ -435,27 +374,6 @@ async function refresh() {
 }
 
 async function start() {
-  if (window.__TAURI_INTERNALS__) {
-    const { invoke } = await import("@tauri-apps/api/core");
-    window.ledgerDesktop = {
-      state: () => invoke("ledger_state"),
-      settings: () => invoke("get_settings"),
-      save: (settings) => invoke("save_settings", { settings }),
-    };
-    const desk = document.getElementById("desk");
-    desk.hidden = false;
-    const settings = await window.ledgerDesktop.settings();
-    document.getElementById("desk-remote").value = settings.remote || "";
-    document.getElementById("desk-token").value = settings.token || "";
-    document.getElementById("desk-form").addEventListener("submit", async (event) => {
-      event.preventDefault();
-      await window.ledgerDesktop.save({
-        remote: document.getElementById("desk-remote").value.trim(),
-        token: document.getElementById("desk-token").value.trim(),
-      });
-      document.getElementById("desk-status").textContent = "Saved. New auctions are sent to the shared ledger.";
-    });
-  }
   refresh().catch(() => {
     document.getElementById("sync").textContent = "The ledger site is not running.";
   });

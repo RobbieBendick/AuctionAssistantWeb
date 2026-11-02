@@ -12,8 +12,6 @@ import (
 	"time"
 )
 
-const ledgerKey = "AuctionAssistant-ledger"
-
 type App struct {
 	mu        sync.Mutex
 	DataPath  string
@@ -249,147 +247,9 @@ func publicFile(root, urlPath string) string {
 	return cleanFile
 }
 
-func cors(w http.ResponseWriter) {
-	h := w.Header()
-	h.Set("access-control-allow-origin", "*")
-	h.Set("access-control-allow-methods", "GET, POST, OPTIONS")
-	h.Set("access-control-allow-headers", "authorization, content-type")
-	h.Set("access-control-max-age", "86400")
-}
-
 func writeJSON(w http.ResponseWriter, status int, body []byte) {
 	w.Header().Set("content-type", "application/json; charset=utf-8")
 	w.Header().Set("cache-control", "no-store")
 	w.WriteHeader(status)
 	_, _ = w.Write(body)
-}
-
-func (a *App) APIHandler() http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/ledger", a.serveLedger)
-	mux.HandleFunc("/api/icon/", a.serveIcon)
-	return mux
-}
-
-func (a *App) serveLedger(w http.ResponseWriter, r *http.Request) {
-	cors(w)
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-	header := r.Header.Get("authorization")
-	if !BearerOk(header, os.Getenv("LEDGER_TOKEN")) {
-		writeJSON(w, http.StatusUnauthorized, []byte(`{"error":"unauthorized"}`))
-		return
-	}
-	if os.Getenv("UPSTASH_REDIS_REST_URL") == "" || os.Getenv("UPSTASH_REDIS_REST_TOKEN") == "" {
-		writeJSON(w, http.StatusServiceUnavailable, []byte(`{"error":"Connect Upstash Redis on the Vercel project."}`))
-		return
-	}
-	raw, err := redisDo([]any{"GET", ledgerKey})
-	if err != nil {
-		writeJSON(w, http.StatusBadGateway, errorJSON(err))
-		return
-	}
-	events := []Event{}
-	if raw != "" && raw != "null" {
-		_ = json.Unmarshal([]byte(raw), &events)
-	}
-	if r.Method == http.MethodPost {
-		var body struct {
-			Events []Event `json:"events"`
-		}
-		_ = json.NewDecoder(r.Body).Decode(&body)
-		events = MergeEvents(events, body.Events)
-		encoded, _ := json.Marshal(events)
-		if _, err := redisDo([]any{"SET", ledgerKey, string(encoded)}); err != nil {
-			writeJSON(w, http.StatusBadGateway, errorJSON(err))
-			return
-		}
-	} else if r.Method != http.MethodGet {
-		writeJSON(w, http.StatusMethodNotAllowed, []byte(`{"error":"method"}`))
-		return
-	}
-	body, _ := json.Marshal(struct {
-		Events  []Event `json:"events"`
-		Summary Summary `json:"summary"`
-	}{events, Summarize(events)})
-	writeJSON(w, http.StatusOK, body)
-}
-
-func (a *App) serveIcon(w http.ResponseWriter, r *http.Request) {
-	cors(w)
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-	id := strings.TrimPrefix(r.URL.Path, "/api/icon/")
-	if !itemID.MatchString(id) {
-		http.Error(w, "Not found", http.StatusNotFound)
-		return
-	}
-	icon, _ := redisString([]any{"GET", "AuctionAssistant-icon:" + id})
-	if icon == "" {
-		tip, err := fetchBytes("https://nether.wowhead.com/tooltip/item/" + id)
-		if err != nil {
-			http.Error(w, "Not found", http.StatusNotFound)
-			return
-		}
-		icon = IconFromTooltip(string(tip))
-		if icon == "" {
-			http.Error(w, "Not found", http.StatusNotFound)
-			return
-		}
-		_, _ = redisDo([]any{"SET", "AuctionAssistant-icon:" + id, icon})
-	}
-	w.Header().Set("location", "https://wow.zamimg.com/images/wow/icons/large/"+icon+".jpg")
-	w.Header().Set("cache-control", "public, max-age=86400")
-	w.WriteHeader(http.StatusFound)
-}
-
-func errorJSON(err error) []byte {
-	body, _ := json.Marshal(map[string]string{"error": err.Error()})
-	return body
-}
-
-func redisDo(command []any) (string, error) {
-	url := os.Getenv("UPSTASH_REDIS_REST_URL")
-	token := os.Getenv("UPSTASH_REDIS_REST_TOKEN")
-	if url == "" || token == "" {
-		return "", nil
-	}
-	payload, _ := json.Marshal(command)
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(payload))
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("authorization", "Bearer "+token)
-	req.Header.Set("content-type", "application/json")
-	res, err := iconClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer res.Body.Close()
-	body, _ := io.ReadAll(res.Body)
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return "", os.ErrInvalid
-	}
-	var wrapped struct {
-		Result json.RawMessage `json:"result"`
-	}
-	if json.Unmarshal(body, &wrapped) != nil {
-		return "", os.ErrInvalid
-	}
-	if len(wrapped.Result) == 0 || string(wrapped.Result) == "null" {
-		return "", nil
-	}
-	var text string
-	if json.Unmarshal(wrapped.Result, &text) == nil {
-		return text, nil
-	}
-	return string(wrapped.Result), nil
-}
-
-func redisString(command []any) (string, error) {
-	return redisDo(command)
 }

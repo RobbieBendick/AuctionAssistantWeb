@@ -1,3 +1,2 @@
-// Vercel origin for the shared ledger, with no trailing slash.
-// Leave this empty when the page is opened from `go run .`.
-window.LEDGER_API = "";
+// Vercel API origin, with no trailing slash. The page only reads this.
+window.LEDGER_API = "https://auction-assistant-backend.vercel.app";

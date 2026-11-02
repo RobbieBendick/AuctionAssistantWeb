@@ -23,14 +23,6 @@ func main() {
 		Remote:    os.Getenv("LEDGER_REMOTE"),
 		Token:     os.Getenv("LEDGER_TOKEN"),
 	}
-	if len(os.Args) > 1 && os.Args[1] == "-api" {
-		fmt.Println("auction ledger api  http://0.0.0.0:" + port)
-		if err := http.ListenAndServe(":"+port, app.APIHandler()); err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-		return
-	}
 	files := func() []string {
 		return findSaved(os.Getenv("WOW_SAVED"), envOr("WOW_ROOT", `C:\Program Files (x86)\World of Warcraft`))
 	}
