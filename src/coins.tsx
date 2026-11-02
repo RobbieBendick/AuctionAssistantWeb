@@ -1,11 +1,37 @@
 const GOLD = "https://wow.zamimg.com/images/icons/money-gold.gif";
 const SILVER = "https://wow.zamimg.com/images/icons/money-silver.gif";
 const COPPER = "https://wow.zamimg.com/images/icons/money-copper.gif";
-const SIZE = 5;
-const ICON = { width: SIZE, height: SIZE, imageRendering: "pixelated" as const, display: "block", flex: "none" };
 
-function CoinIcon({ src }: { src: string }) {
-  return <img alt="" src={src} width={SIZE} height={SIZE} style={ICON} />;
+/** Ledger amounts were inheriting 22px from .value; keep money on its own scale. */
+const FONT = 13;
+const ICON = 10;
+
+function Denom({
+  amount,
+  tone,
+  src,
+}: {
+  amount: number;
+  tone: "g" | "s" | "c";
+  src: string;
+}) {
+  return (
+    <span
+      className={`aa-coin aa-coin-${tone}`}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        paddingRight: ICON + 2,
+        backgroundImage: `url(${src})`,
+        backgroundRepeat: "no-repeat",
+        backgroundPosition: "right center",
+        backgroundSize: `${ICON}px ${ICON}px`,
+        lineHeight: 1,
+      }}
+    >
+      {amount}
+    </span>
+  );
 }
 
 export function Coins({ copper }: { copper: number }) {
@@ -16,11 +42,22 @@ export function Coins({ copper }: { copper: number }) {
   const silver = Math.floor((abs % 10000) / 100);
   const copperLeft = abs % 100;
   return (
-    <span className="coins">
-      {negative ? <span className="coin-sign">−</span> : null}
-      {gold ? <span className="coin"><span className="g">{gold}</span><CoinIcon src={GOLD} /></span> : null}
-      {silver || gold ? <span className="coin"><span className="s">{silver}</span><CoinIcon src={SILVER} /></span> : null}
-      <span className="coin"><span className="c">{copperLeft}</span><CoinIcon src={COPPER} /></span>
+    <span
+      className="aa-coins"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        whiteSpace: "nowrap",
+        fontSize: FONT,
+        fontVariantNumeric: "tabular-nums",
+        lineHeight: 1.2,
+      }}
+    >
+      {negative ? <span className="aa-coin-sign">−</span> : null}
+      {gold ? <Denom amount={gold} tone="g" src={GOLD} /> : null}
+      {silver || gold ? <Denom amount={silver} tone="s" src={SILVER} /> : null}
+      <Denom amount={copperLeft} tone="c" src={COPPER} />
     </span>
   );
 }
